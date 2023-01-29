@@ -39,39 +39,39 @@
 #endif
 
 /******************************************************************************
- * Private constant and macro definitions using #define
- *****************************************************************************/
+* Private constant and macro definitions using #define
+*****************************************************************************/
+#define KEY_GESTURE_DOUBLECLICK	KEY_WAKEUP
+#define KEY_GESTURE_UP	KEY_UP
+#define KEY_GESTURE_DOWN	KEY_DOWN
 #define KEY_GESTURE_LEFT	KEY_LEFT
 #define KEY_GESTURE_RIGHT	KEY_RIGHT
-#define KEY_GESTURE_UP		KEY_UP
-#define KEY_GESTURE_DOWN	KEY_DOWN
-#define KEY_GESTURE_DOUBLECLICK		KEY_WAKEUP
-#define KEY_GESTURE_AOD		KEY_GOTO
-#define KEY_GESTURE_O		KEY_O
-#define KEY_GESTURE_W		KEY_W
-#define KEY_GESTURE_M		KEY_M
-#define KEY_GESTURE_E		KEY_E
-#define KEY_GESTURE_C		KEY_C
-#define KEY_GESTURE_Z		KEY_Z
-#define KEY_GESTURE_L		KEY_L
-#define KEY_GESTURE_S		KEY_S
-#define KEY_GESTURE_V		KEY_V
+#define KEY_GESTURE_O	KEY_O
+#define KEY_GESTURE_E	KEY_E
+#define KEY_GESTURE_M	KEY_M
+#define KEY_GESTURE_L	KEY_L
+#define KEY_GESTURE_W	KEY_W
+#define KEY_GESTURE_S	KEY_S
+#define KEY_GESTURE_V	KEY_V
+#define KEY_GESTURE_C	KEY_C
+#define KEY_GESTURE_Z	KEY_Z
+#define KEY_GESTURE_SINGLECLICK	KEY_GOTO
 
 #define GESTURE_LEFT		0x20
 #define GESTURE_RIGHT		0x21
 #define GESTURE_UP		0x22
 #define GESTURE_DOWN		0x23
 #define GESTURE_DOUBLECLICK	0x24
-#define GESTURE_AOD		0x25
-#define GESTURE_O		0x30
-#define GESTURE_W		0x31
-#define GESTURE_M		0x32
-#define GESTURE_E		0x33
-#define GESTURE_C		0x34
-#define GESTURE_Z		0x41
-#define GESTURE_L		0x44
-#define GESTURE_S		0x46
-#define GESTURE_V		0x54
+#define GESTURE_O	0x30
+#define GESTURE_W	0x31
+#define GESTURE_M	0x32
+#define GESTURE_E	0x33
+#define GESTURE_L	0x44
+#define GESTURE_S	0x46
+#define GESTURE_V	0x54
+#define GESTURE_Z	0x41
+#define GESTURE_C	0x34
+#define GESTURE_SINGLECLICK	0x25
 
 #define WAKEUP_OFF		4
 #define WAKEUP_ON		5
@@ -310,9 +310,6 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 	case GESTURE_DOWN:
 		gesture = KEY_GESTURE_DOWN;
 		break;
-	case GESTURE_AOD:
-		gesture = KEY_GESTURE_AOD;
-		break;
 	case GESTURE_O:
 		gesture = KEY_GESTURE_O;
 		break;
@@ -325,12 +322,6 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 	case GESTURE_E:
 		gesture = KEY_GESTURE_E;
 		break;
-	case GESTURE_C:
-		gesture = KEY_GESTURE_C;
-		break;
-	case GESTURE_Z:
-		gesture = KEY_GESTURE_Z;
-		break;
 	case GESTURE_L:
 		gesture = KEY_GESTURE_L;
 		break;
@@ -339,6 +330,15 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 		break;
 	case GESTURE_V:
 		gesture = KEY_GESTURE_V;
+		break;
+	case GESTURE_Z:
+		gesture = KEY_GESTURE_Z;
+		break;
+	case GESTURE_C:
+		gesture = KEY_GESTURE_C;
+		break;
+	case GESTURE_SINGLECLICK:
+		gesture = KEY_GESTURE_SINGLECLICK;
 		break;
 	default:
 		FTS_DEBUG("unknown gesture_id:0x%x, skip", gesture_id);
@@ -589,23 +589,38 @@ int fts_gesture_init(struct fts_ts_data *ts_data)
 	FTS_FUNC_ENTER();
 
 	input_dev->event = fts_gesture_switch;
+	input_set_capability(input_dev, EV_KEY, KEY_GOTO);
 	input_set_capability(input_dev, EV_KEY, KEY_SLEEP);
 	input_set_capability(input_dev, EV_KEY, KEY_POWER);
-	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_LEFT);
-	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_RIGHT);
 	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_UP);
 	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_DOWN);
-	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_DOUBLECLICK);
-	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_AOD);
+	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_LEFT);
+	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_RIGHT);
 	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_O);
-	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_W);
-	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_M);
 	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_E);
-	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_C);
-	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_Z);
+	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_M);
 	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_L);
+	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_W);
 	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_S);
 	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_V);
+	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_Z);
+	input_set_capability(input_dev, EV_KEY, KEY_GESTURE_C);
+
+	__set_bit(KEY_GOTO, input_dev->keybit);
+	__set_bit(KEY_SLEEP, input_dev->keybit);
+	__set_bit(KEY_GESTURE_RIGHT, input_dev->keybit);
+	__set_bit(KEY_GESTURE_LEFT, input_dev->keybit);
+	__set_bit(KEY_GESTURE_UP, input_dev->keybit);
+	__set_bit(KEY_GESTURE_DOWN, input_dev->keybit);
+	__set_bit(KEY_GESTURE_O, input_dev->keybit);
+	__set_bit(KEY_GESTURE_E, input_dev->keybit);
+	__set_bit(KEY_GESTURE_M, input_dev->keybit);
+	__set_bit(KEY_GESTURE_W, input_dev->keybit);
+	__set_bit(KEY_GESTURE_L, input_dev->keybit);
+	__set_bit(KEY_GESTURE_S, input_dev->keybit);
+	__set_bit(KEY_GESTURE_V, input_dev->keybit);
+	__set_bit(KEY_GESTURE_C, input_dev->keybit);
+	__set_bit(KEY_GESTURE_Z, input_dev->keybit);
 
 	fts_create_gesture_sysfs(ts_data->dev);
 

@@ -310,9 +310,6 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 	case GESTURE_DOWN:
 		gesture = KEY_GESTURE_DOWN;
 		break;
-	case GESTURE_DOUBLECLICK:
-		gesture = KEY_GESTURE_DOUBLECLICK;
-		break;
 	case GESTURE_AOD:
 		gesture = KEY_GESTURE_AOD;
 		break;

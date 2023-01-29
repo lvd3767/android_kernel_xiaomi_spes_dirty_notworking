@@ -342,22 +342,18 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 		break;
 	default:
 		FTS_DEBUG("unknown gesture_id:0x%x, skip", gesture_id);
-		return;
+		gesture = 1;
+		break;
 	}
 
-	if (gesture == KEY_GESTURE_AOD) {
-		if (!fts_data->aod_changed)
-			return;
-	} else {
-		if (!fts_data->gesture_mode)
-			return;
+	/* report event key */
+	if (gesture != 1) {
+		FTS_DEBUG("Gesture Code=%d", gesture);
+		input_report_key(input_dev, gesture, 1);
+		input_sync(input_dev);
+		input_report_key(input_dev, gesture, 0);
+		input_sync(input_dev);
 	}
-
-	FTS_DEBUG("report gesture key=%d", gesture);
-	input_report_key(input_dev, gesture, 1);
-	input_sync(input_dev);
-	input_report_key(input_dev, gesture, 0);
-	input_sync(input_dev);
 }
 
 /*****************************************************************************

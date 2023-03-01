@@ -302,8 +302,12 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 {
 	int gesture;
 
-	FTS_DEBUG("gesture_id:0x%x", gesture_id);
+	if (is_dt2w_sensor) {
+		fts_data->double_tap_pressed = (gesture_id == GESTURE_DOUBLECLICK) ? 1 : 0;
+		sysfs_notify(&fts_data->client->dev.kobj, NULL, "double_tap_pressed");
+	}
 
+	FTS_DEBUG("gesture_id:0x%x", gesture_id);
 	switch (gesture_id) {
 	case GESTURE_LEFT:
 		gesture = KEY_GESTURE_LEFT;

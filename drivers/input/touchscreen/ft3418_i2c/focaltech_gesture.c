@@ -264,6 +264,22 @@ static ssize_t fts_gesture_buf_show(struct device *dev,
 	return count;
 }
 
+static inline ssize_t double_tap_pressed_get(struct device *device,
+                               struct device_attribute *attribute,
+                               char *buffer)
+{
+       struct fts_ts_data *ts = dev_get_drvdata(device);
+       return scnprintf(buffer, PAGE_SIZE, "%i\n", ts->double_tap_pressed);
+}
+
+static inline ssize_t single_tap_pressed_get(struct device *device,
+                               struct device_attribute *attribute,
+                               char *buffer)
+{
+       struct fts_ts_data *ts = dev_get_drvdata(device);
+       return scnprintf(buffer, PAGE_SIZE, "%i\n", ts->single_tap_pressed);
+}
+
 /*
  * sysfs gesture nodes:
  *   fts_gesture_mode : read/write gesture enable state
@@ -271,10 +287,17 @@ static ssize_t fts_gesture_buf_show(struct device *dev,
  */
 static DEVICE_ATTR_RW(fts_gesture_mode);
 static DEVICE_ATTR_RO(fts_gesture_buf);
+static DEVICE_ATTR(double_tap_pressed, S_IRUGO,
+                   double_tap_pressed_get, NULL);
+static DEVICE_ATTR(single_tap_pressed, S_IRUGO,
+                   single_tap_pressed_get, NULL);
+
 
 static struct attribute *fts_gesture_mode_attrs[] = {
 	&dev_attr_fts_gesture_mode.attr,
 	&dev_attr_fts_gesture_buf.attr,
+	&dev_attr_double_tap_pressed.attr,
+	&dev_attr_single_tap_pressed.attr,
 	NULL,
 };
 
@@ -307,7 +330,11 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 		sysfs_notify(&fts_data->client->dev.kobj, NULL, "double_tap_pressed");
 	}
 
+	fts_data->single_tap_pressed = (gesture_id == GESTURE_SINGLECLICK) ? 1 : 0;
+	sysfs_notify(&fts_data->client->dev.kobj, NULL, "single_tap_pressed");
+
 	FTS_DEBUG("gesture_id:0x%x", gesture_id);
+
 	switch (gesture_id) {
 	case GESTURE_LEFT:
 		gesture = KEY_GESTURE_LEFT;

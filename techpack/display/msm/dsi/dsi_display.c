@@ -53,6 +53,14 @@ struct dsi_display *get_main_display(void)
 }
 EXPORT_SYMBOL(get_main_display);
 
+struct drm_panel *get_active_panel(void)
+{
+	if (!primary_display || !primary_display->panel)
+		return NULL;
+	return &primary_display->panel->drm_panel;
+}
+EXPORT_SYMBOL(get_active_panel);
+
 static void dsi_display_mask_ctrl_error_interrupts(struct dsi_display *display,
 			u32 mask, bool enable)
 {

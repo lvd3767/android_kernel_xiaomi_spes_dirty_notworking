@@ -739,5 +739,6 @@ int dsi_display_get_panel_vfp(void *display,
 	int h_active, int v_active);
 
 struct dsi_display *get_main_display(void);
+struct drm_panel *get_active_panel(void);
 
 #endif /* _DSI_DISPLAY_H_ */

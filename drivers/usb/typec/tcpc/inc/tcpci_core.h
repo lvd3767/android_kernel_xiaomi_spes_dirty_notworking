@@ -542,49 +542,52 @@ static inline bool pd_check_rev30(struct pd_port *pd_port)
 		((tcpc && tcpc->desc && tcpc->desc->name && tcpc->desc->name[0]) \
 		? tcpc->desc->name : "<none>"), ##__VA_ARGS__)
 #else
-#define RT_DBG_INFO(fmt, ...)	__RT_DBG_INFO(fmt, ##__VA_ARGS__)
+#define RT_DBG_INFO(fmt, ...)	\
+do {	\
+	__RT_DBG_INFO(fmt, ##__VA_ARGS__);	\
+} while (0)
 #endif /* CONFIG_TCPC_LOG_WITH_PORT_NAME */
 
 #if TYPEC_DBG_ENABLE
 #define TYPEC_DBG(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[TYPEC]: " fmt, ##__VA_ARGS__)
 #else
-#define TYPEC_DBG(fmt, ...)	((void)0)
+#define TYPEC_DBG(fmt, ...)	do { } while (0)
 #endif /* TYPEC_DBG_ENABLE */
 
 #if TYPEC_INFO_ENABLE
 #define TYPEC_INFO(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[TYPEC]: " fmt, ##__VA_ARGS__)
 #else
-#define TYPEC_INFO(fmt, ...)	((void)0)
+#define TYPEC_INFO(fmt, ...)	do { } while (0)
 #endif /* TYPEC_INFO_ENABLE */
 
 #if TYPEC_INFO2_ENABLE
 #define TYPEC_INFO2(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[TYPEC]: " fmt, ##__VA_ARGS__)
 #else
-#define TYPEC_INFO2(fmt, ...)	((void)0)
+#define TYPEC_INFO2(fmt, ...)	do { } while (0)
 #endif /* TYPEC_INFO2_ENABLE */
 
 #if TCPC_INFO_ENABLE
 #define TCPC_INFO(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[TCPC]: " fmt, ##__VA_ARGS__)
 #else
-#define TCPC_INFO(fmt, ...)	((void)0)
+#define TCPC_INFO(fmt, ...)	do { } while (0)
 #endif /* TCPC_INFO_ENABLE */
 
 #if TCPC_DBG_ENABLE
 #define TCPC_DBG(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[TCPC]: " fmt, ##__VA_ARGS__)
 #else
-#define TCPC_DBG(fmt, ...)	((void)0)
+#define TCPC_DBG(fmt, ...)	do { } while (0)
 #endif /* TCPC_DBG_ENABLE */
 
 #if TCPC_DBG2_ENABLE
 #define TCPC_DBG2(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[TCPC]: " fmt, ##__VA_ARGS__)
 #else
-#define TCPC_DBG2(fmt, ...)	((void)0)
+#define TCPC_DBG2(fmt, ...)	do { } while (0)
 #endif /* TCPC_DBG2_ENABLE */
 
 #define TCPC_ERR(fmt, ...)	\
@@ -597,84 +600,84 @@ static inline bool pd_check_rev30(struct pd_port *pd_port)
 #define DPM_INFO(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[DPM]: " fmt, ##__VA_ARGS__)
 #else
-#define DPM_INFO(fmt, ...)	((void)0)
+#define DPM_INFO(fmt, ...)	do { } while (0)
 #endif /* DPM_INFO_ENABLE */
 
 #if DPM_INFO2_ENABLE
 #define DPM_INFO2(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[DPM]: " fmt, ##__VA_ARGS__)
 #else
-#define DPM_INFO2(fmt, ...)	((void)0)
+#define DPM_INFO2(fmt, ...)	do { } while (0)
 #endif /* DPM_INFO2_ENABLE */
 
 #if DPM_DBG_ENABLE
 #define DPM_DBG(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[DPM]: " fmt, ##__VA_ARGS__)
 #else
-#define DPM_DBG(fmt, ...)	((void)0)
+#define DPM_DBG(fmt, ...)	do { } while (0)
 #endif /* DPM_DBG_ENABLE */
 
 #if PD_ERR_ENABLE
 #define PD_ERR(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[PD-ERR]: " fmt, ##__VA_ARGS__)
 #else
-#define PD_ERR(fmt, ...)	((void)0)
+#define PD_ERR(fmt, ...)	do { } while (0)
 #endif /* PD_ERR_ENABLE */
 
 #if PE_INFO_ENABLE
 #define PE_INFO(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[PE]: " fmt, ##__VA_ARGS__)
 #else
-#define PE_INFO(fmt, ...)	((void)0)
+#define PE_INFO(fmt, ...)	do { } while (0)
 #endif /* PE_INFO_ENABLE */
 
 #if PE_EVENT_DBG_ENABLE
 #define PE_EVT_INFO(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[PE-EVT]: " fmt, ##__VA_ARGS__)
 #else
-#define PE_EVT_INFO(fmt, ...)	((void)0)
+#define PE_EVT_INFO(fmt, ...)	do { } while (0)
 #endif /* PE_EVENT_DBG_ENABLE */
 
 #if PE_DBG_ENABLE
 #define PE_DBG(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[PE]: " fmt, ##__VA_ARGS__)
 #else
-#define PE_DBG(fmt, ...)	((void)0)
+#define PE_DBG(fmt, ...)	do { } while (0)
 #endif /* PE_DBG_ENABLE */
 
 #if PE_STATE_INFO_ENABLE
 #define PE_STATE_INFO(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[PE]: " fmt, ##__VA_ARGS__)
 #else
-#define PE_STATE_INFO(fmt, ...)	((void)0)
+#define PE_STATE_INFO(fmt, ...)	do { } while (0)
 #endif /* PE_STATE_INFO_ENABLE */
 
 #if DP_INFO_ENABLE
 #define DP_INFO(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[DP]: " fmt, ##__VA_ARGS__)
 #else
-#define DP_INFO(fmt, ...)	((void)0)
+#define DP_INFO(fmt, ...)	do { } while (0)
 #endif /* DP_INFO_ENABLE */
 
 #if DP_DBG_ENABLE
 #define DP_DBG(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[DP]: " fmt, ##__VA_ARGS__)
 #else
-#define DP_DBG(fmt, ...)	((void)0)
+#define DP_DBG(fmt, ...)	do { } while (0)
 #endif /* DP_DBG_ENABLE */
 
 #if UVDM_INFO_ENABLE
 #define UVDM_INFO(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[UVDM]: " fmt, ##__VA_ARGS__)
 #else
-#define UVDM_INFO(fmt, ...)	((void)0)
+#define UVDM_INFO(fmt, ...)	do { } while (0)
 #endif /* UVDM_INFO_ENABLE */
 
 #if TCPM_DBG_ENABLE
 #define TCPM_DBG(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[TCPM]: " fmt, ##__VA_ARGS__)
 #else
-#define TCPM_DBG(fmt, ...)	((void)0)
+#define TCPM_DBG(fmt, ...)	do { } while (0)
 #endif /* TCPM_DBG_ENABLE */
 
 #ifdef CONFIG_USB_PD_ALT_MODE_RTDC
@@ -683,14 +686,14 @@ static inline bool pd_check_rev30(struct pd_port *pd_port)
 #define DC_INFO(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[DC] " fmt, ##__VA_ARGS__)
 #else
-#define DC_INFO(fmt, ...)	((void)0)
+#define DC_INFO(fmt, ...)	do { } while (0)
 #endif /* DC_INFO_ENABLE */
 
 #if DC_DBG_ENABLE
 #define DC_DBG(fmt, ...)	\
 	RT_DBG_INFO(CONFIG_TCPC_DBG_PRESTR "[DC] " fmt, ##__VA_ARGS__)
 #else
-#define DC_DBG(fmt, ...)	((void)0)
+#define DC_DBG(fmt, ...)	do { } while (0)
 #endif /* DC_DBG_ENABLE */
 
 #endif /* CONFIG_USB_PD_ALT_MODE_RTDC */

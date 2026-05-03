@@ -26,7 +26,6 @@
 #include <linux/module.h>
 #include <linux/irq_work.h>
 #include <linux/posix-timers.h>
-#include <linux/timer.h>
 #include <linux/context_tracking.h>
 #include <linux/mm.h>
 #include <linux/rq_stats.h>
@@ -797,7 +796,6 @@ static void tick_nohz_stop_tick(struct tick_sched *ts, int cpu)
 	 */
 	if (!ts->tick_stopped) {
 		calc_load_nohz_start();
-		cpu_load_update_nohz_start();
 		quiet_vmstat();
 
 		ts->last_tick = hrtimer_get_expires(&ts->sched_timer);
@@ -844,7 +842,6 @@ static void tick_nohz_restart_sched_tick(struct tick_sched *ts, ktime_t now)
 {
 	/* Update jiffies first */
 	tick_do_update_jiffies64(now);
-	cpu_load_update_nohz_stop();
 
 	/*
 	 * Clear the timer idle flag, so we avoid IPIs on remote queueing and
@@ -941,11 +938,6 @@ static void __tick_nohz_idle_stop_tick(struct tick_sched *ts)
 {
 	ktime_t expires;
 	int cpu = smp_processor_id();
-
-#ifdef CONFIG_SMP
-	if (check_pending_deferrable_timers(cpu))
-		raise_softirq_irqoff(TIMER_SOFTIRQ);
-#endif
 
 	/*
 	 * If tick_nohz_get_sleep_length() ran tick_nohz_next_event(), the

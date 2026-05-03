@@ -75,6 +75,8 @@
 #include <asm/div64.h>
 #include "internal.h"
 
+atomic_long_t kswapd_waiters = ATOMIC_LONG_INIT(0);
+
 /* prevent >1 _updater_ of zone percpu pageset ->high and ->batch fields */
 static DEFINE_MUTEX(pcp_batch_high_lock);
 #define MIN_PERCPU_PAGELIST_FRACTION	(8)
@@ -320,20 +322,7 @@ compound_page_dtor * const compound_page_dtors[] = {
  */
 int min_free_kbytes = 1024;
 int user_min_free_kbytes = -1;
-#ifdef CONFIG_DISCONTIGMEM
-/*
- * DiscontigMem defines memory ranges as separate pg_data_t even if the ranges
- * are not on separate NUMA nodes. Functionally this works but with
- * watermark_boost_factor, it can reclaim prematurely as the ranges can be
- * quite small. By default, do not boost watermarks on discontigmem as in
- * many cases very high-order allocations like THP are likely to be
- * unsupported and the premature reclaim offsets the advantage of long-term
- * fragmentation avoidance.
- */
 int watermark_boost_factor __read_mostly;
-#else
-int watermark_boost_factor __read_mostly = 15000;
-#endif
 int watermark_scale_factor = 10;
 
 /*
@@ -4026,46 +4015,6 @@ __alloc_pages_direct_compact(gfp_t gfp_mask, unsigned int order,
 	return NULL;
 }
 
-#ifdef CONFIG_HAVE_LOW_MEMORY_KILLER
-static inline bool
-should_compact_lmk_retry(struct alloc_context *ac, int order, int alloc_flags)
-{
-	struct zone *zone;
-	struct zoneref *z;
-
-	/* Let costly order requests check for compaction progress */
-	if (order > PAGE_ALLOC_COSTLY_ORDER)
-		return false;
-
-	/*
-	 * For (0 < order < PAGE_ALLOC_COSTLY_ORDER) allow the shrinkers
-	 * to run and free up memory. Do not let these allocations fail
-	 * if shrinkers can free up memory. This is similar to
-	 * should_compact_retry implementation for !CONFIG_COMPACTION.
-	 */
-	for_each_zone_zonelist_nodemask(zone, z, ac->zonelist,
-				ac->high_zoneidx, ac->nodemask) {
-		unsigned long available;
-
-		available = zone_reclaimable_pages(zone);
-		available +=
-			zone_page_state_snapshot(zone, NR_FREE_PAGES);
-
-		if (__zone_watermark_ok(zone, 0, min_wmark_pages(zone),
-			ac_classzone_idx(ac), alloc_flags, available))
-			return true;
-	}
-
-	return false;
-}
-#else
-static inline bool
-should_compact_lmk_retry(struct alloc_context *ac, int order, int alloc_flags)
-{
-	return false;
-}
-#endif
-
 static inline bool
 should_compact_retry(struct alloc_context *ac, int order, int alloc_flags,
 		     enum compact_result compact_result,
@@ -4080,9 +4029,6 @@ should_compact_retry(struct alloc_context *ac, int order, int alloc_flags,
 
 	if (!order)
 		return false;
-
-	if (should_compact_lmk_retry(ac, order, alloc_flags))
-		return true;
 
 	if (compaction_made_progress(compact_result))
 		(*compaction_retries)++;
@@ -4438,8 +4384,7 @@ should_reclaim_retry(gfp_t gfp_mask, unsigned order,
 	 * their order will become available due to high fragmentation so
 	 * always increment the no progress counter for them
 	 */
-	if ((did_some_progress && order <= PAGE_ALLOC_COSTLY_ORDER) ||
-			IS_ENABLED(CONFIG_HAVE_LOW_MEMORY_KILLER))
+	if (did_some_progress && order <= PAGE_ALLOC_COSTLY_ORDER)
 		*no_progress_loops = 0;
 	else
 		(*no_progress_loops)++;
@@ -4567,6 +4512,8 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
 	unsigned int cpuset_mems_cookie;
 	unsigned int zonelist_iter_cookie;
 	int reserve_flags;
+	bool woke_kswapd = false;
+	bool used_vmpressure = false;
 
 	/*
 	 * We also sanity check to catch abuse of atomic reserves being used by
@@ -4602,8 +4549,15 @@ restart:
 	if (!ac->preferred_zoneref->zone)
 		goto nopage;
 
-	if (alloc_flags & ALLOC_KSWAPD)
+	if (alloc_flags & ALLOC_KSWAPD) {
+		if (!woke_kswapd) {
+			atomic_long_inc(&kswapd_waiters);
+			woke_kswapd = true;
+		}
+		if (!used_vmpressure)
+			used_vmpressure = vmpressure_inc_users(order);
 		wake_all_kswapds(order, gfp_mask, ac);
+	}
 
 	/*
 	 * The adjusted alloc_flags might result in immediate success, so try
@@ -4704,6 +4658,8 @@ retry:
 		goto nopage;
 
 	/* Try direct reclaim and then allocating */
+	if (!used_vmpressure)
+		used_vmpressure = vmpressure_inc_users(order);
 	page = __alloc_pages_direct_reclaim(gfp_mask, order, alloc_flags, ac,
 							&did_some_progress);
 	if (page)
@@ -4737,16 +4693,12 @@ retry:
 	 * implementation of the compaction depends on the sufficient amount
 	 * of free memory (see __compaction_suitable)
 	 */
-	if ((did_some_progress > 0 ||
-			IS_ENABLED(CONFIG_HAVE_LOW_MEMORY_KILLER)) &&
-			can_compact &&
+	if (did_some_progress > 0 && can_compact &&
 			should_compact_retry(ac, order, alloc_flags,
 				compact_result, &compact_priority,
 				&compaction_retries))
 		goto retry;
 
-	if (order <= PAGE_ALLOC_COSTLY_ORDER && should_ulmk_retry(gfp_mask))
-		goto retry;
 
 	/*
 	 * Deal with possible cpuset update races or zonelist updates to avoid
@@ -4764,8 +4716,10 @@ retry:
 	/* Avoid allocations with no watermarks from looping endlessly */
 	if (tsk_is_oom_victim(current) &&
 	    (alloc_flags == ALLOC_OOM ||
-	     (gfp_mask & __GFP_NOMEMALLOC)))
+	     (gfp_mask & __GFP_NOMEMALLOC))) {
+		gfp_mask |= __GFP_NOWARN;
 		goto nopage;
+	}
 
 	/* Retry as long as the OOM killer is making progress */
 	if (did_some_progress) {
@@ -4823,9 +4777,14 @@ nopage:
 		goto retry;
 	}
 fail:
-	warn_alloc(gfp_mask, ac->nodemask,
-			"page allocation failure: order:%u", order);
 got_pg:
+	if (woke_kswapd)
+		atomic_long_dec(&kswapd_waiters);
+	if (used_vmpressure)
+		vmpressure_dec_users();
+	if (!page)
+		warn_alloc(gfp_mask, ac->nodemask,
+				"page allocation failure: order:%u", order);
 	return page;
 }
 

@@ -1388,13 +1388,9 @@ int group_send_sig_info(int sig, struct siginfo *info, struct task_struct *p,
 	rcu_read_unlock();
 
 	if (!ret && sig) {
-		check_panic_on_foreground_kill(p);
 		ret = do_send_sig_info(sig, info, p, type);
-		if (capable(CAP_KILL) && sig == SIGKILL) {
-			if (!strcmp(current->comm, ULMK_MAGIC))
-				add_to_oom_reaper(p);
-			ulmk_update_last_kill();
-		}
+		if (capable(CAP_KILL) && sig == SIGKILL)
+			add_to_oom_reaper(p);
 	}
 
 	return ret;
@@ -3420,8 +3416,11 @@ static int copy_siginfo_from_user_any(siginfo_t *kinfo, siginfo_t __user *info)
 
 static struct pid *pidfd_to_pid(const struct file *file)
 {
-	if (file->f_op == &pidfd_fops)
-		return file->private_data;
+	struct pid *pid;
+
+	pid = pidfd_pid(file);
+	if (!IS_ERR(pid))
+		return pid;
 
 	return tgid_pidfd_to_pid(file);
 }

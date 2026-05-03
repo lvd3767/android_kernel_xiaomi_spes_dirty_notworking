@@ -220,7 +220,7 @@ static inline void cpuidle_use_deepest_state(bool enable)
 #endif
 
 /* kernel/sched/idle.c */
-extern void sched_idle_set_state(struct cpuidle_state *idle_state, int index);
+extern void sched_idle_set_state(struct cpuidle_state *idle_state);
 extern void default_idle_call(void);
 
 #ifdef CONFIG_ARCH_NEEDS_CPU_IDLE_COUPLED
@@ -290,5 +290,7 @@ static inline int cpuidle_register_governor(struct cpuidle_governor *gov)
 
 #define CPU_PM_CPU_IDLE_ENTER_RETENTION(low_level_idle_enter, idx)	\
 	__CPU_PM_CPU_IDLE_ENTER(low_level_idle_enter, idx, 1)
+
+extern bool lpm_sleep_disabled(void);
 
 #endif /* _LINUX_CPUIDLE_H */

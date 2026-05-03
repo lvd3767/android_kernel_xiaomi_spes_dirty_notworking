@@ -749,9 +749,4 @@ static void hdd_sysfs_destroy_bcn_reception_interface(struct hdd_adapter
 {
 	device_remove_file(&adapter->dev->dev, &dev_attr_beacon_stats);
 }
-
-void hdd_sysfs_destroy_adapter_root_obj(struct hdd_adapter *adapter)
-{
-	hdd_sysfs_destroy_bcn_reception_interface(adapter);
-}
 #endif

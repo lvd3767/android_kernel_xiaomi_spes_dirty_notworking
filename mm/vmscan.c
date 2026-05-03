@@ -56,6 +56,7 @@
 
 #include <linux/swapops.h>
 #include <linux/balloon_compaction.h>
+#include <linux/sched/signal.h>
 
 #include "internal.h"
 
@@ -130,12 +131,6 @@ struct scan_control {
 		unsigned int file_taken;
 		unsigned int taken;
 	} nr;
-	/*
-	 * Reclaim pages from a vma. If the page is shared by other tasks
-	 * it is zapped from a vma without reclaim so it ends up remaining
-	 * on memory until last task zap it.
-	 */
-	struct vm_area_struct *target_vma;
 };
 
 /*
@@ -339,8 +334,7 @@ unsigned long zone_reclaimable_pages(struct zone *zone)
 
 	nr = zone_page_state_snapshot(zone, NR_ZONE_INACTIVE_FILE) +
 		zone_page_state_snapshot(zone, NR_ZONE_ACTIVE_FILE);
-	if (get_nr_swap_pages() > 0
-			|| IS_ENABLED(CONFIG_HAVE_LOW_MEMORY_KILLER))
+	if (get_nr_swap_pages() > 0)
 		nr += zone_page_state_snapshot(zone, NR_ZONE_INACTIVE_ANON) +
 			zone_page_state_snapshot(zone, NR_ZONE_ACTIVE_ANON);
 	/*
@@ -1133,7 +1127,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 				      struct scan_control *sc,
 				      enum ttu_flags ttu_flags,
 				      struct reclaim_stat *stat,
-				      bool force_reclaim)
+				      bool ignore_references)
 {
 	LIST_HEAD(ret_pages);
 	LIST_HEAD(free_pages);
@@ -1165,8 +1159,6 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 			goto keep;
 
 		VM_BUG_ON_PAGE(PageActive(page), page);
-		if (pgdat)
-			VM_BUG_ON_PAGE(page_pgdat(page) != pgdat, page);
 
 		sc->nr_scanned++;
 
@@ -1255,8 +1247,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 			/* Case 1 above */
 			if (current_is_kswapd() &&
 			    PageReclaim(page) &&
-			    (pgdat &&
-				test_bit(PGDAT_WRITEBACK, &pgdat->flags))) {
+			    test_bit(PGDAT_WRITEBACK, &pgdat->flags)) {
 				nr_immediate++;
 				goto activate_locked;
 
@@ -1288,7 +1279,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 			}
 		}
 
-		if (!force_reclaim)
+		if (!ignore_references)
 			references = page_check_references(page, sc);
 
 		switch (references) {
@@ -1359,7 +1350,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 
 			if (unlikely(PageTransHuge(page)))
 				flags |= TTU_SPLIT_HUGE_PMD;
-			if (!try_to_unmap(page, flags, sc->target_vma)) {
+			if (!try_to_unmap(page, flags)) {
 				nr_unmap_fail++;
 				goto activate_locked;
 			}
@@ -1378,8 +1369,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 			 */
 			if (page_is_file_cache(page) &&
 			    (!current_is_kswapd() || !PageReclaim(page) ||
-			     (pgdat &&
-				!test_bit(PGDAT_DIRTY, &pgdat->flags)))) {
+			     !test_bit(PGDAT_DIRTY, &pgdat->flags))) {
 				/*
 				 * Immediately reclaim when written back.
 				 * Similar in principal to deactivate_page()
@@ -1499,13 +1489,6 @@ free_it:
 			(*get_compound_page_dtor(page))(page);
 		} else
 			list_add(&page->lru, &free_pages);
-		/*
-		 * If pagelist are from multiple nodes, we should decrease
-		 * NR_ISOLATED_ANON + x on freed pages in here.
-		 */
-		if (!pgdat)
-			dec_node_page_state(page, NR_ISOLATED_ANON +
-					page_is_file_cache(page));
 		continue;
 
 activate_locked:
@@ -1574,40 +1557,6 @@ unsigned long reclaim_clean_pages_from_list(struct zone *zone,
 	mod_node_page_state(zone->zone_pgdat, NR_ISOLATED_FILE, -ret);
 	return ret;
 }
-
-#ifdef CONFIG_PROCESS_RECLAIM
-unsigned long reclaim_pages_from_list(struct list_head *page_list,
-					struct vm_area_struct *vma)
-{
-	struct scan_control sc = {
-		.gfp_mask = GFP_KERNEL,
-		.priority = DEF_PRIORITY,
-		.may_writepage = 1,
-		.may_unmap = 1,
-		.may_swap = 1,
-		.target_vma = vma,
-	};
-
-	unsigned long nr_reclaimed;
-	struct page *page;
-
-	list_for_each_entry(page, page_list, lru)
-		ClearPageActive(page);
-
-	nr_reclaimed = shrink_page_list(page_list, NULL, &sc,
-			TTU_IGNORE_ACCESS, NULL, true);
-
-	while (!list_empty(page_list)) {
-		page = lru_to_page(page_list);
-		list_del(&page->lru);
-		dec_node_page_state(page, NR_ISOLATED_ANON +
-				page_is_file_cache(page));
-		putback_lru_page(page);
-	}
-
-	return nr_reclaimed;
-}
-#endif
 
 /*
  * Attempt to remove the specified page from its LRU.  Only take this page
@@ -2248,6 +2197,62 @@ static void shrink_active_list(unsigned long nr_to_scan,
 			nr_deactivate, nr_rotated, sc->priority, file);
 }
 
+unsigned long reclaim_pages(struct list_head *page_list)
+{
+	int nid = -1;
+	unsigned long nr_reclaimed = 0;
+	LIST_HEAD(node_page_list);
+	struct reclaim_stat dummy_stat;
+	struct page *page;
+	struct scan_control sc = {
+		.gfp_mask = GFP_KERNEL,
+		.priority = DEF_PRIORITY,
+		.may_writepage = 1,
+		.may_unmap = 1,
+		.may_swap = 1,
+	};
+
+	while (!list_empty(page_list)) {
+		page = lru_to_page(page_list);
+		if (nid == -1) {
+			nid = page_to_nid(page);
+			INIT_LIST_HEAD(&node_page_list);
+		}
+
+		if (nid == page_to_nid(page)) {
+			ClearPageActive(page);
+			list_move(&page->lru, &node_page_list);
+			continue;
+		}
+
+		nr_reclaimed += shrink_page_list(&node_page_list,
+						NODE_DATA(nid),
+						&sc, 0,
+						&dummy_stat, false);
+		while (!list_empty(&node_page_list)) {
+			page = lru_to_page(&node_page_list);
+			list_del(&page->lru);
+			putback_lru_page(page);
+		}
+
+		nid = -1;
+	}
+
+	if (!list_empty(&node_page_list)) {
+		nr_reclaimed += shrink_page_list(&node_page_list,
+						NODE_DATA(nid),
+						&sc, 0,
+						&dummy_stat, false);
+		while (!list_empty(&node_page_list)) {
+			page = lru_to_page(&node_page_list);
+			list_del(&page->lru);
+			putback_lru_page(page);
+		}
+	}
+
+	return nr_reclaimed;
+}
+
 /*
  * The inactive anon list should be small enough that the VM never has
  * to do too much work.
@@ -2832,7 +2837,7 @@ static bool shrink_node(pg_data_t *pgdat, struct scan_control *sc)
 			/* Record the group's reclaim efficiency */
 			vmpressure(sc->gfp_mask, memcg, false,
 				   sc->nr_scanned - scanned,
-				   sc->nr_reclaimed - reclaimed);
+				   sc->nr_reclaimed - reclaimed, sc->order);
 
 			/*
 			 * Direct reclaim and kswapd have to scan all memory
@@ -2861,7 +2866,7 @@ static bool shrink_node(pg_data_t *pgdat, struct scan_control *sc)
 		 */
 		vmpressure(sc->gfp_mask, sc->target_mem_cgroup, true,
 			   sc->nr_scanned - nr_scanned,
-			   sc->nr_reclaimed - nr_reclaimed);
+			   sc->nr_reclaimed - nr_reclaimed, sc->order);
 
 		if (reclaim_state) {
 			sc->nr_reclaimed += reclaim_state->reclaimed_slab;
@@ -3121,7 +3126,7 @@ retry:
 
 	do {
 		vmpressure_prio(sc->gfp_mask, sc->target_mem_cgroup,
-				sc->priority);
+				sc->priority, sc->order);
 		sc->nr_scanned = 0;
 		shrink_zones(zonelist, sc);
 
@@ -3169,7 +3174,7 @@ retry:
 	return 0;
 }
 
-static bool allow_direct_reclaim(pg_data_t *pgdat)
+static bool allow_direct_reclaim(pg_data_t *pgdat, bool using_kswapd)
 {
 	struct zone *zone;
 	unsigned long pfmemalloc_reserve = 0;
@@ -3198,6 +3203,10 @@ static bool allow_direct_reclaim(pg_data_t *pgdat)
 
 	wmark_ok = free_pages > pfmemalloc_reserve / 2;
 
+	/* The throttled direct reclaimer is now a kswapd waiter */
+	if (unlikely(!using_kswapd && !wmark_ok))
+		atomic_long_inc(&kswapd_waiters);
+
 	/* kswapd must be awake if processes are being throttled */
 	if (!wmark_ok && waitqueue_active(&pgdat->kswapd_wait)) {
 		if (READ_ONCE(pgdat->kswapd_classzone_idx) > ZONE_NORMAL)
@@ -3207,6 +3216,19 @@ static bool allow_direct_reclaim(pg_data_t *pgdat)
 	}
 
 	return wmark_ok;
+}
+
+#define CRITICAL_OOM_SCORE_ADJ	(-900)
+
+static __always_inline bool task_is_critical(void)
+{
+	if (current->flags & PF_KTHREAD)
+		return false;
+
+	if (unlikely(!current->signal))
+		return false;
+
+	return READ_ONCE(current->signal->oom_score_adj) <= CRITICAL_OOM_SCORE_ADJ;
 }
 
 /*
@@ -3232,7 +3254,7 @@ static bool throttle_direct_reclaim(gfp_t gfp_mask, struct zonelist *zonelist,
 	 * committing a transaction where throttling it could forcing other
 	 * processes to block on log_wait_commit().
 	 */
-	if ((current->flags & PF_KTHREAD) || !strcmp(current->comm, ULMK_MAGIC))
+	if (current->flags & PF_KTHREAD)
 		goto out;
 
 	/*
@@ -3263,13 +3285,16 @@ static bool throttle_direct_reclaim(gfp_t gfp_mask, struct zonelist *zonelist,
 
 		/* Throttle based on the first usable node */
 		pgdat = zone->zone_pgdat;
-		if (allow_direct_reclaim(pgdat))
+		if (allow_direct_reclaim(pgdat, gfp_mask & __GFP_KSWAPD_RECLAIM))
 			goto out;
 		break;
 	}
 
 	/* If no zone was usable by the allocation flags then do not throttle */
 	if (!pgdat)
+		goto out;
+
+	if (task_is_critical())
 		goto out;
 
 	/* Account for the throttling */
@@ -3285,16 +3310,18 @@ static bool throttle_direct_reclaim(gfp_t gfp_mask, struct zonelist *zonelist,
 	 */
 	if (!(gfp_mask & __GFP_FS)) {
 		wait_event_interruptible_timeout(pgdat->pfmemalloc_wait,
-			allow_direct_reclaim(pgdat), HZ);
+			allow_direct_reclaim(pgdat, true), HZ);
 
 		goto check_pending;
 	}
 
 	/* Throttle until kswapd wakes the process */
 	wait_event_killable(zone->zone_pgdat->pfmemalloc_wait,
-		allow_direct_reclaim(pgdat));
+		allow_direct_reclaim(pgdat, true));
 
 check_pending:
+	if (unlikely(!(gfp_mask & __GFP_KSWAPD_RECLAIM)))
+		atomic_long_dec(&kswapd_waiters);
 	if (fatal_signal_pending(current))
 		return true;
 
@@ -3757,14 +3784,15 @@ restart:
 		 * able to safely make forward progress. Wake them
 		 */
 		if (waitqueue_active(&pgdat->pfmemalloc_wait) &&
-				allow_direct_reclaim(pgdat))
+				allow_direct_reclaim(pgdat, true))
 			wake_up_all(&pgdat->pfmemalloc_wait);
 
 		/* Check if kswapd should be suspending */
 		__fs_reclaim_release();
 		ret = try_to_freeze();
 		__fs_reclaim_acquire();
-		if (ret || kthread_should_stop())
+		if (ret || kthread_should_stop() ||
+		    !atomic_long_read(&kswapd_waiters))
 			break;
 
 		/*

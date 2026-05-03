@@ -95,6 +95,7 @@
 #include <linux/thread_info.h>
 #include <linux/cpufreq_times.h>
 #include <linux/scs.h>
+#include <linux/simple_lmk.h>
 
 #include <linux/pgtable.h>
 #include <asm/pgalloc.h>
@@ -871,12 +872,10 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 #endif
 
 	/*
-	 * One for the user space visible state that goes away when reaped.
-	 * One for the scheduler.
+	 * One for us, one for whoever does the "release_task()" (usually
+	 * parent)
 	 */
-	refcount_set(&tsk->rcu_users, 2);
-	/* One for the rcu users */
-	refcount_set(&tsk->usage, 1);
+	refcount_set(&tsk->usage, 2);
 #ifdef CONFIG_BLK_DEV_IO_TRACE
 	tsk->btrace_seq = 0;
 #endif
@@ -1035,6 +1034,7 @@ static inline void __mmput(struct mm_struct *mm)
 	ksm_exit(mm);
 	khugepaged_exit(mm); /* must run before exit_mmap */
 	exit_mmap(mm);
+	simple_lmk_mm_freed(mm);
 	mm_put_huge_zero_page(mm);
 	set_mm_exe_file(mm, NULL);
 	if (!list_empty(&mm->mmlist)) {
@@ -1668,6 +1668,14 @@ static __always_inline void delayed_free_task(struct task_struct *tsk)
 		free_task(tsk);
 }
 
+struct pid *pidfd_pid(const struct file *file)
+{
+	if (file->f_op == &pidfd_fops)
+		return file->private_data;
+
+	return ERR_PTR(-EBADF);
+}
+
 static int pidfd_release(struct inode *inode, struct file *file)
 {
 	struct pid *pid = file->private_data;
@@ -2209,6 +2217,7 @@ static __latent_entropy struct task_struct *copy_process(
 		fd_install(pidfd, pidfile);
 
 	proc_fork_connector(p);
+	sched_post_fork(p);
 	cgroup_post_fork(p);
 	cgroup_threadgroup_change_end(current);
 	perf_event_fork(p);
@@ -2265,7 +2274,6 @@ bad_fork_cleanup_perf:
 	perf_event_free_task(p);
 bad_fork_cleanup_policy:
 	lockdep_free_task(p);
-	free_task_load_ptrs(p);
 #ifdef CONFIG_NUMA
 	mpol_put(p->mempolicy);
 bad_fork_cleanup_threadgroup_lock:

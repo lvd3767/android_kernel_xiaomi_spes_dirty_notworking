@@ -57,6 +57,37 @@ config CC_CAN_LINK_STATIC
 	default $(success,$(srctree)/scripts/cc-can-link.sh $(CC) -static $(m64-flag)) if 64BIT
 	default $(success,$(srctree)/scripts/cc-can-link.sh $(CC) -static $(m32-flag))
 
+choice
+    prompt "Fake uname kernel version"
+    default FAKE_UNAME_NONE
+    help
+      Kernel side spoof for BPF.
+
+config FAKE_UNAME_NONE
+    bool "None"
+    help
+      Don't spoof uname version.
+
+config FAKE_UNAME_5_4
+    bool "5.4"
+
+config FAKE_UNAME_5_10
+    bool "5.10"
+
+config FAKE_UNAME_5_15
+    bool "5.15"
+
+config FAKE_UNAME_6_1
+	bool "6.1"
+
+config FAKE_UNAME_6_6
+	bool "6.6"
+
+config FAKE_UNAME_6_12
+	bool "6.12"
+
+endchoice
+
 config CC_HAS_ASM_GOTO
 	def_bool $(success,$(srctree)/scripts/gcc-goto.sh $(CC))
 
@@ -473,6 +504,11 @@ config HAVE_SCHED_AVG_IRQ
 	depends on IRQ_TIME_ACCOUNTING || PARAVIRT_TIME_ACCOUNTING
 	depends on SMP
 
+config SCHED_THERMAL_PRESSURE
+	default y
+	bool "Enable periodic averaging of thermal pressure"
+	depends on SMP
+
 config BSD_PROCESS_ACCT
 	bool "BSD Process Accounting"
 	depends on MULTIUSER
@@ -792,6 +828,16 @@ config UCLAMP_BUCKETS_COUNT
 	  If in doubt, use the default value.
 
 endmenu
+
+config PELT_COMPATIBILITY_LAYER
+	bool "Compatibility layer for Qualcomm performance HALs"
+	depends on !SCHED_WALT
+	help
+	  This option enables a non-operational compatibility layer for use in
+	  lieu of Window Assisted Load Tracking on systems which expect it.
+
+	  If unsure, say N.
+
 
 #
 # For architectures that want to enable the support for NUMA-affine scheduler
@@ -1191,6 +1237,31 @@ config CHECKPOINT_RESTORE
 
 	  If unsure, say N here.
 
+config SCHED_CASS
+	bool "Capacity Aware Superset Scheduler"
+	depends on SMP
+	help
+	  This enables the Capacity Aware Superset Scheduler (CASS), which
+	  optimizes runqueue selection of CFS tasks. By using CPU capacity as a
+	  basis for comparing the relative utilization between different CPUs,
+	  CASS fairly balances load across CPUs of varying capacities. This
+	  results in improved multi-core performance, especially when CPUs are
+	  overutilized because CASS doesn't clip a CPU's utilization when it
+	  eclipses the CPU's capacity.
+
+	  As a superset of capacity aware scheduling, CASS implements a
+	  hierarchy of criteria to determine the better CPU to wake a task upon
+	  between CPUs that have the same relative utilization. This way,
+	  single-core performance, latency, and cache affinity are all optimized
+	  where possible.
+
+	  CASS doesn't feature explicit energy awareness but its basic load
+	  balancing principle results in decreased overall energy, often better
+	  than what is possible with explicit energy awareness. By fairly
+	  balancing load based on relative utilization, all CPUs are kept at
+	  their lowest P-state necessary to satisfy the overall load at any
+	  given moment.
+
 config SCHED_AUTOGROUP
 	bool "Automatic process group scheduling"
 	select CGROUPS
@@ -1383,8 +1454,6 @@ config BPF
 
 menuconfig EXPERT
 	bool "Configure standard kernel features (expert users)"
-	# Unhide debug options, to make the on-by-default options visible
-	select DEBUG_KERNEL
 	help
 	  This option allows certain base kernel options and settings
           to be disabled or tweaked. This is for specialized

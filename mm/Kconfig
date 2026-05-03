@@ -815,15 +815,6 @@ config PERCPU_STATS
 	  information includes global and per chunk statistics, which can
 	  be used to help understand percpu memory usage.
 
-config HAVE_USERSPACE_LOW_MEMORY_KILLER
-	bool "Have userspace low memory killer"
-	default n
-	help
-	  The page allocator cannot directly call into a
-	  userspace low memory killer as it can call into the OOM killer.
-	  Therefore, add a timeout mechanism to give the userspace
-	  low memory killer a chance to run.
-
 config GUP_BENCHMARK
 	bool "Enable infrastructure for get_user_pages_fast() benchmarking"
 	default n
@@ -838,21 +829,16 @@ config ARCH_HAS_PTE_SPECIAL
 
 endmenu
 
-config PROCESS_RECLAIM
-	bool "Enable process reclaim"
-	depends on PROC_FS
-	default y
+config MEMFD_ASHMEM_SHIM
+	bool "Memfd ashmem ioctl compatibility support"
+	depends on MEMFD_CREATE
 	help
-	 It allows to reclaim pages of the process by /proc/pid/reclaim.
+	  This provides compatibility support for ashmem ioctl commands against
+	  memfd file descriptors. This is useful for compatibility on Android
+	  for older applications that may use ashmem's ioctl commands on the
+	  now memfds passed to them.
 
-	 (echo file > /proc/PID/reclaim) reclaims file-backed pages only.
-	 (echo anon > /proc/PID/reclaim) reclaims anonymous pages only.
-	 (echo all > /proc/PID/reclaim) reclaims all pages.
-
-	 (echo addr size-byte > /proc/PID/reclaim) reclaims pages in
-	 (addr, addr + size-bytes) of the process.
-
-	 Any other value is ignored.
+	  Unless you are running Android, say N.
 
 config FORCE_ALLOC_FROM_DMA_ZONE
 	bool "Force certain memory allocators to always return ZONE_DMA32 memory"

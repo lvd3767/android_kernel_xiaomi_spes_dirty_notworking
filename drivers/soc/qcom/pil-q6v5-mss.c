@@ -277,6 +277,13 @@ static int pil_subsys_init(struct modem_data *drv,
 		goto err_subsys;
 	}
 
+	/*
+	 * Avoid full SoC panic/reboot on modem firmware crashes
+	 * (e.g. LL1 assertion failures). Restart just the modem
+	 * subsystem (and coupled deps like IPA) instead.
+	 */
+	drv->subsys->restart_level = RESET_SUBSYS_COUPLED;
+
 	drv->ramdump_dev = create_ramdump_device("modem", &pdev->dev);
 	if (!drv->ramdump_dev) {
 		pr_err("%s: Unable to create a modem ramdump device.\n",

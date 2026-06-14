@@ -34,6 +34,12 @@
 
 #include "internal.h"
 #include <trace/hooks/syscall_check.h>
+#ifdef CONFIG_KSU
+extern int ksu_handle_faccessat(int *dfd,
+				const char __user **filename_user,
+				int *mode,
+				int *__unused_flags);
+#endif
 
 int do_truncate2(struct vfsmount *mnt, struct dentry *dentry, loff_t length,
 		unsigned int time_attrs, struct file *filp)
@@ -453,6 +459,10 @@ out:
 
 SYSCALL_DEFINE3(faccessat, int, dfd, const char __user *, filename, int, mode)
 {
+#ifdef CONFIG_KSU
+	ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
+#endif
+
 	return do_faccessat(dfd, filename, mode);
 }
 

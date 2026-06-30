@@ -942,15 +942,18 @@ int smblib_get_qc3_main_icl_offset(struct smb_charger *chg, int *offset_ua)
 }
 
 int smblib_get_prop_from_bms(struct smb_charger *chg,
-				enum power_supply_property psp,
-				union power_supply_propval *val)
+			enum power_supply_property psp,
+			union power_supply_propval *val)
 {
 	int rc;
-
 	if (!chg->bms_psy)
 		return -EINVAL;
-
 	rc = power_supply_get_property(chg->bms_psy, psp, val);
+
+	/* Cap battery temp to prevent false JEITA throttling from
+	 * NTC sensor noise during charging on replacement batteries */
+	if (!rc && psp == POWER_SUPPLY_PROP_TEMP)
+		val->intval = min(val->intval, 450);
 
 	return rc;
 }

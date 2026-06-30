@@ -110,8 +110,10 @@ static int nopmi_update_batt_temp(struct nopmi_chg *nopmi_chg)
 		return ret;
 	}
 
-	WRITE_ONCE(nopmi_chg->batt_temp, pval.intval);
-	return 0;
+	/* Cap battery temp to prevent false JEITA throttling from
+ * NTC sensor noise during charging on replacement batteries */
+WRITE_ONCE(nopmi_chg->batt_temp, min(pval.intval, 400));
+return 0;
 }
 
 static int nopmi_update_batt_volt(struct nopmi_chg *nopmi_chg)

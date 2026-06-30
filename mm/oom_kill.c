@@ -18,6 +18,7 @@
  */
 
 #include <linux/oom.h>
+#include <linux/psi.h>
 #include <linux/mm.h>
 #include <linux/err.h>
 #include <linux/gfp.h>
@@ -71,7 +72,126 @@ int sysctl_reap_mem_on_sigkill = 1;
 DEFINE_MUTEX(oom_lock);
 /* Serializes oom_score_adj and oom_score_adj_min updates */
 DEFINE_MUTEX(oom_adj_mutex);
+/*
+ * If ULMK has killed a process recently,
+ * we are making progress.
+ */
 
+#ifdef CONFIG_HAVE_USERSPACE_LOW_MEMORY_KILLER
+
+/* The maximum amount of time to loop in should_ulmk_retry() */
+#define ULMK_TIMEOUT (20 * HZ)
+#define ULMK_EMERG_TRIG_TIMEOUT (ULMK_TIMEOUT + 10 * HZ)
+
+#define ULMK_DBG_POLICY_TRIGGER (BIT(0))
+#define ULMK_DBG_POLICY_WDOG (BIT(1))
+#define ULMK_DBG_POLICY_POSITIVE_ADJ (BIT(2))
+#define ULMK_DBG_POLICY_ALL (BIT(3) - 1)
+static unsigned int ulmk_dbg_policy;
+module_param(ulmk_dbg_policy, uint, 0644);
+
+static atomic64_t ulmk_wdog_expired = ATOMIC64_INIT(0);
+static atomic64_t ulmk_kill_jiffies = ATOMIC64_INIT(INITIAL_JIFFIES);
+static atomic64_t ulmk_watchdog_pet_jiffies = ATOMIC64_INIT(INITIAL_JIFFIES);
+static unsigned long psi_emergency_jiffies = INITIAL_JIFFIES;
+static unsigned long psi_emerg_trigger_jiffies = INITIAL_JIFFIES;
+static DEFINE_MUTEX(ulmk_retry_lock);
+
+static bool __maybe_unused ulmk_kill_possible(void)
+{
+	struct task_struct *tsk;
+	bool ret = false;
+
+	rcu_read_lock();
+	for_each_process(tsk) {
+		if (tsk->flags & PF_KTHREAD)
+			continue;
+
+		task_lock(tsk);
+		if (tsk->signal->oom_score_adj >= 0) {
+			ret = true;
+			task_unlock(tsk);
+			break;
+		}
+		task_unlock(tsk);
+	}
+	rcu_read_unlock();
+
+	return ret;
+}
+
+bool should_ulmk_retry(gfp_t gfp_mask)
+{
+	unsigned long now, last_kill, last_wdog_pet;
+	bool ret = true;
+	bool wdog_expired, trigger_active;
+
+	struct oom_control oc = {
+		.zonelist = node_zonelist(first_memory_node, gfp_mask),
+		.nodemask = NULL,
+		.memcg = NULL,
+		.gfp_mask = gfp_mask,
+		.order = 0,
+		.only_positive_adj = true,
+	};
+
+	if (!sysctl_panic_on_oom)
+		return false;
+
+	if (gfp_mask & __GFP_RETRY_MAYFAIL)
+		return false;
+
+	if (!mutex_trylock(&ulmk_retry_lock))
+		return true;
+
+	now = jiffies;
+	last_kill = atomic64_read(&ulmk_kill_jiffies);
+	last_wdog_pet = atomic64_read(&ulmk_watchdog_pet_jiffies);
+	wdog_expired = atomic64_read(&ulmk_wdog_expired);
+	trigger_active = psi_is_trigger_active();
+
+	if (time_after(last_kill, psi_emergency_jiffies)) {
+		psi_emergency_jiffies = now;
+		ret = true;
+	} else if (time_after(now, psi_emergency_jiffies + ULMK_TIMEOUT) &&
+		   time_after(now, last_wdog_pet + ULMK_TIMEOUT) &&
+		   time_after(psi_emerg_trigger_jiffies,
+				now - ULMK_EMERG_TRIG_TIMEOUT)) {
+		ret = false;
+	} else if (!trigger_active) {
+		BUG_ON(ulmk_dbg_policy & ULMK_DBG_POLICY_TRIGGER);
+		psi_emergency_trigger();
+		psi_emerg_trigger_jiffies = now;
+		ret = true;
+	} else if (wdog_expired) {
+		mutex_lock(&oom_lock);
+		ret = out_of_memory(&oc);
+		mutex_unlock(&oom_lock);
+		BUG_ON(!ret && ulmk_dbg_policy & ULMK_DBG_POLICY_POSITIVE_ADJ);
+	}
+
+	mutex_unlock(&ulmk_retry_lock);
+	return ret;
+}
+
+void ulmk_watchdog_fn(struct timer_list *t)
+{
+	atomic64_set(&ulmk_wdog_expired, 1);
+	BUG_ON(ulmk_dbg_policy & ULMK_DBG_POLICY_WDOG);
+}
+
+void ulmk_watchdog_pet(struct timer_list *t)
+{
+	del_timer_sync(t);
+	atomic64_set(&ulmk_wdog_expired, 0);
+	atomic64_set(&ulmk_watchdog_pet_jiffies, jiffies);
+}
+
+void ulmk_update_last_kill(void)
+{
+	atomic64_set(&ulmk_kill_jiffies, jiffies);
+}
+#endif
 #ifdef CONFIG_NUMA
 /**
  * has_intersects_mems_allowed() - check task eligiblity for kill

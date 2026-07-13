@@ -55,9 +55,9 @@
 
 /* TODO:
  * - add substream support for multiple devices in case of
- *	SND_DYNAMIC_MINORS is not used
+ *     SND_DYNAMIC_MINORS is not used
  * - Multiple node representation
- *	driver should be able to register multiple nodes
+ *     driver should be able to register multiple nodes
  */
 
 static DEFINE_MUTEX(device_mutex);
@@ -1241,6 +1241,7 @@ int snd_compress_deregister(struct snd_compr *device)
 	return 0;
 }
 EXPORT_SYMBOL_GPL(snd_compress_deregister);
+
 
 MODULE_DESCRIPTION("ALSA Compressed offload framework");
 MODULE_AUTHOR("Vinod Koul <vinod.koul@linux.intel.com>");

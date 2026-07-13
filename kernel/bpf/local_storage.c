@@ -256,13 +256,14 @@ static int cgroup_storage_get_next_key(struct bpf_map *_map, void *key,
 		goto enoent;
 
 	if (key) {
-		storage = cgroup_storage_lookup(map, key, true);
-		if (!storage)
-			goto enoent;
+	storage = cgroup_storage_lookup(map, key, true);
+	if (!storage)
+		goto enoent;
 
-		storage = list_next_entry(storage, list_map);
-		if (!storage)
-			goto enoent;
+	storage = list_next_entry(storage, list_map);
+	if (!storage)
+		goto enoent;
+
 	} else {
 		storage = list_first_entry(&map->list,
 					 struct bpf_cgroup_storage, list_map);

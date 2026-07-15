@@ -1414,6 +1414,7 @@ void rmnet_shs_wq_debug_print_flows(void)
 		cpu_node = &rx_flow_tbl_p->cpu_list[cpu_num];
 		flows = rx_flow_tbl_p->cpu_list[cpu_num].flows;
 
+#ifdef CONFIG_SCHED_WALT
 		rm_err("SHS_CPU: cpu[%d]: flows=%d pps=%llu bps=%llu "
 		       "qhead_diff %u qhead_total = %u qhead_start = %u "
 		       "qhead = %u qhead_last = %u isolated = %d ",
@@ -1422,6 +1423,15 @@ void rmnet_shs_wq_debug_print_flows(void)
 		       cpu_node->qhead_start,
 		       cpu_node->qhead, cpu_node->last_qhead,
 		       cpu_isolated(cpu_num));
+#else
+		rm_err("SHS_CPU: cpu[%d]: flows=%d pps=%llu bps=%llu "
+		       "qhead_diff %u qhead_total = %u qhead_start = %u "
+		       "qhead = %u qhead_last = %u ",
+		       cpu_num, flows, cpu_node->rx_pps, cpu_node->rx_bps,
+		       cpu_node->qhead_diff, cpu_node->qhead_total,
+		       cpu_node->qhead_start,
+		       cpu_node->qhead, cpu_node->last_qhead);
+#endif
 
 		list_for_each_entry(hnode,
 				    &rmnet_shs_wq_hstat_tbl,

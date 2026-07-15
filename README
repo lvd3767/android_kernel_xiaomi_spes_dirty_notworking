@@ -1,3 +1,54 @@
+# android_kernel_xiaomi_spes_dirty_notworking
+
+## Credits
+- Base kernel: [Shaddowalker-26](https://github.com/Shaddowalker-26/android_kernel_xiaomi_spes)
+- MultiSU: [xxblebleblexx/MultiSU](https://github.com/xxblebleblexx/MultiSU)
+- susfs4ksu: [simonpunk/susfs4ksu](https://gitlab.com/simonpunk/susfs4ksu)
+- KernelSU-Next + susfs backport: [sidex15/KernelSU-Next](https://github.com/sidex15/KernelSU-Next)
+
+---
+
+This repository is based on the work of [Shaddowalker-26](https://github.com/Shaddowalker-26/android_kernel_xiaomi_spes).
+
+⚠️ **Note**: this is a personal work-in-progress fork (dirty/notworking), currently under modification. This is **not** the original author's repository and may not be functional as-is.
+
+Credit and thanks to Shaddowalker-26 for the original work on this kernel (ksu and susfs support for LineageOS 23.2 on spes/spesn).
+
+---
+
+## ⚠️ Status
+The kernel **compiles without errors** but **gets stuck on the Mi logo** at boot. Help needed to debug.
+
+## Specifications
+- **Device:** Xiaomi Redmi Note 11 (spes/spesn)
+- **Kernel:** 4.19.325
+- **KernelSU:** MultiSU v3.2.0 (KernelSU-Next fork, legacy_susfs branch)
+- **susfs:** v1.5.5 official + stubs for v2.x API compatibility
+
+## Key modified files
+
+| File | Description |
+|---|---|
+| `fs/susfs.c` | susfs v1.5.5 + stubs for missing v2.x functions |
+| `include/linux/susfs.h` | susfs function declarations |
+| `include/linux/susfs_def.h` | Definitions (SUSFS_MAGIC, CMD_*, etc.) |
+| `MultiSU/kernel/supercall/supercall.c` | Fixed casts for susfs v1.5.5 compatibility |
+| `arch/arm64/configs/vendor/xiaomi/spes.config` | Kernel config with CONFIG_KSU_SUSFS=y |
+| `fs/namespace.c` | Modified for susfs (mnt_id, etc.) |
+| `fs/proc/task_mmu.c` | Modified for susfs (show_map_vma) |
+| `kernel/sys.c` | Modified for susfs (spoof_uname) |
+| `include/linux/mount.h` | Modified for susfs (ANDROID_KABI) |
+
+## Problem
+The kernel compiles, but the phone gets stuck on the Mi logo (no bootloop, no direct fastboot - just frozen). Likely a silent kernel panic.  
+
+## Build
+```bash
+cp arch/arm64/configs/vendor/xiaomi/spes.config .config
+make olddefconfig O=out ARCH=arm64
+make O=out ARCH=arm64 -j$(nproc)
+Output image: out/arch/arm64/boot/Image.gz
+
 Linux kernel
 ============
 
@@ -5,13 +56,14 @@ There are several guides for kernel developers and users. These guides can
 be rendered in a number of formats, like HTML and PDF. Please read
 Documentation/admin-guide/README.rst first.
 
-In order to build the documentation, use ``make htmldocs`` or
-``make pdfdocs``.  The formatted documentation can also be read online at:
+In order to build the documentation, use make htmldocs or
+make pdfdocs. The formatted documentation can also be read online at:
 
-    https://www.kernel.org/doc/html/latest/
+https://www.kernel.org/doc/html/latest/
 
 There are various text files in the Documentation/ subdirectory,
 several of them using the Restructured Text markup notation.
+
 See Documentation/00-INDEX for a list of what is contained in each file.
 
 Please read the Documentation/process/changes.rst file, as it contains the
